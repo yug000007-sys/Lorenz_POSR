@@ -1,6 +1,8 @@
 """
 Reads a raw supplier file — csv, xlsx/xls/xlsm, pdf, or Outlook .msg — into
-a pandas DataFrame.
+one or more "raw sheets": headerless grids (integer column labels) so the
+app can let the user pick the correct header row and filter out title/
+subtotal/pivot rows before mapping, per sheet.
 
 Nothing here is ever cached (no st.cache_*) or written to a persistent
 location. PDF/MSG parsing needs a real file on disk for the underlying
@@ -9,6 +11,7 @@ in a `finally` block before this function returns.
 """
 import io
 import os
+import re
 import tempfile
 
 import pandas as pd
@@ -18,31 +21,76 @@ class UnsupportedFileError(ValueError):
     pass
 
 
-def read_supplier_file(uploaded_file) -> tuple[pd.DataFrame, str | None]:
+def read_raw_sheets(uploaded_file) -> tuple[dict, str | None]:
     """
-    Returns (DataFrame, note). `note` is an optional human-readable string
-    explaining how the data was extracted (e.g. which PDF table, or which
-    email attachment), or None if nothing noteworthy happened.
+    Returns ({sheet_name: raw_grid_df}, note).
+    Every raw_grid_df has NO assumed header — row 0 is just the first row
+    of the file, columns are 0..n-1 — so the caller picks the header row.
+    `note` is an optional human-readable string (e.g. which PDF page or
+    email attachment the data came from), or None.
     """
     name = uploaded_file.name.lower()
     uploaded_file.seek(0)
     raw_bytes = uploaded_file.read()
 
     if name.endswith(".csv"):
-        return pd.read_csv(io.BytesIO(raw_bytes), dtype=str, keep_default_na=True), None
+        df = pd.read_csv(io.BytesIO(raw_bytes), header=None, dtype=str, keep_default_na=True)
+        return {"Data": df.reset_index(drop=True)}, None
 
     if name.endswith((".xlsx", ".xlsm", ".xls")):
-        return pd.read_excel(io.BytesIO(raw_bytes), dtype=str), None
+        sheets = pd.read_excel(io.BytesIO(raw_bytes), sheet_name=None, header=None, dtype=str)
+        return {sn: df.reset_index(drop=True) for sn, df in sheets.items()}, None
 
     if name.endswith(".pdf"):
-        return _read_pdf(raw_bytes)
+        df, note = _read_pdf(raw_bytes)
+        return {"PDF Table": _headered_to_raw(df)}, note
 
     if name.endswith(".msg"):
-        return _read_msg(raw_bytes)
+        df, note = _read_msg(raw_bytes)
+        return {"Email Attachment": _headered_to_raw(df)}, note
 
     raise UnsupportedFileError(
         f"Unsupported file type: {uploaded_file.name}. Supported: csv, xlsx, xls, xlsm, pdf, msg."
     )
+
+
+def guess_header_row(raw_df: pd.DataFrame, max_scan: int = 15) -> int:
+    """Best-guess row index (0-based) most likely to be the real header row."""
+    best_row, best_score = 0, -1
+    for r in range(min(max_scan, len(raw_df))):
+        row = raw_df.iloc[r]
+        score = row.notna().sum()
+        if score > best_score:
+            best_score, best_row = score, r
+    return best_row
+
+
+def apply_header_row(raw_df: pd.DataFrame, header_row_idx: int) -> pd.DataFrame:
+    """Turn a raw grid into a proper DataFrame using row `header_row_idx` as the header."""
+    header = raw_df.iloc[header_row_idx].fillna("").astype(str).str.strip().tolist()
+    header = [h if h else f"Column_{i + 1}" for i, h in enumerate(header)]
+    body = raw_df.iloc[header_row_idx + 1:].reset_index(drop=True)
+    body.columns = header
+    return body
+
+
+def filter_required_columns(df: pd.DataFrame, required_columns: list) -> pd.DataFrame:
+    """Keep only rows where every column in `required_columns` is non-blank (drops subtotal/pivot/blank rows)."""
+    if not required_columns:
+        return df
+    mask = pd.Series(True, index=df.index)
+    for col in required_columns:
+        if col in df.columns:
+            mask &= df[col].notna() & (df[col].astype(str).str.strip() != "")
+    return df[mask].reset_index(drop=True)
+
+
+def _headered_to_raw(df: pd.DataFrame) -> pd.DataFrame:
+    """Wrap an already-headered DataFrame (from pdf/msg extraction) back into raw-grid form."""
+    header_row = pd.DataFrame([list(df.columns)], columns=range(df.shape[1]))
+    body = df.copy()
+    body.columns = range(df.shape[1])
+    return pd.concat([header_row, body], ignore_index=True)
 
 
 def _read_pdf(raw_bytes: bytes) -> tuple[pd.DataFrame, str]:
