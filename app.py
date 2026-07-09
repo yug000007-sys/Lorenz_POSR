@@ -16,7 +16,6 @@ persisted (in data/mappings.db) so you don't have to redo mapping work.
 import datetime as dt
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from master_header import MASTER_COLUMNS, SUPPLIERS
@@ -257,120 +256,14 @@ with tab_mappings:
 with tab_dashboard:
     if st.session_state.current_raw_df is not None:
         st.subheader(f"Current raw file: {st.session_state.current_raw_name} ({st.session_state.current_supplier})")
-        st.caption(f"{st.session_state.current_raw_df.shape[0]} rows, {st.session_state.current_raw_df.shape[1]} columns — shown in full, with header.")
+        st.caption(f"{st.session_state.current_raw_df.shape[0]} rows, {st.session_state.current_raw_df.shape[1]} columns.")
         st.dataframe(st.session_state.current_raw_df, use_container_width=True)
         st.divider()
 
     df = st.session_state.merged_df
-
+    st.subheader("Merged data")
     if df.empty:
-        st.info("Merge at least one supplier file in the **Merge Files** tab to see the merged dashboard.")
+        st.info("Merge at least one supplier file in the **Merge Files** tab to see it here.")
     else:
-        work = df.copy()
-        for numeric_col in ["Qty", "UnitCost", "UnitResale", "Sales", "Commissions", "Billings"]:
-            if numeric_col in work.columns:
-                work[numeric_col] = pd.to_numeric(work[numeric_col], errors="coerce")
-
-        st.subheader("Filters")
-        f1, f2 = st.columns([2, 1])
-        with f1:
-            suppliers_present = sorted(work["Supplier_name"].dropna().unique().tolist())
-            chosen = st.multiselect("Supplier", suppliers_present, default=suppliers_present)
-        with f2:
-            st.write("")
-
-        if chosen:
-            work = work[work["Supplier_name"].isin(chosen)]
-
-        st.subheader("Overview")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Rows", f"{len(work):,}")
-        m2.metric("Suppliers", work["Supplier_name"].nunique())
-        if "Sales" in work.columns and work["Sales"].notna().any():
-            m3.metric("Total Sales", f"{work['Sales'].sum():,.2f}")
-        else:
-            m3.metric("Total Sales", "—")
-        if "Commissions" in work.columns and work["Commissions"].notna().any():
-            m4.metric("Total Commissions", f"{work['Commissions'].sum():,.2f}")
-        else:
-            m4.metric("Total Commissions", "—")
-
-        st.divider()
-
-        chart_col1, chart_col2 = st.columns(2)
-
-        with chart_col1:
-            if "Sales" in work.columns and work["Sales"].notna().any():
-                sales_by_supplier = (
-                    work.groupby("Supplier_name", dropna=False)["Sales"]
-                    .sum()
-                    .sort_values(ascending=False)
-                    .reset_index()
-                )
-                fig = px.bar(sales_by_supplier, x="Supplier_name", y="Sales", title="Sales by Supplier")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.caption("No 'Sales' data mapped yet, so this chart is unavailable.")
-
-        with chart_col2:
-            if "Qty" in work.columns and work["Qty"].notna().any():
-                qty_by_supplier = (
-                    work.groupby("Supplier_name", dropna=False)["Qty"]
-                    .sum()
-                    .sort_values(ascending=False)
-                    .reset_index()
-                )
-                fig = px.bar(qty_by_supplier, x="Supplier_name", y="Qty", title="Quantity by Supplier")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.caption("No 'Qty' data mapped yet, so this chart is unavailable.")
-
-        chart_col3, chart_col4 = st.columns(2)
-
-        with chart_col3:
-            if "Commissions" in work.columns and work["Commissions"].notna().any():
-                comm_by_supplier = (
-                    work.groupby("Supplier_name", dropna=False)["Commissions"]
-                    .sum()
-                    .sort_values(ascending=False)
-                    .reset_index()
-                )
-                fig = px.bar(
-                    comm_by_supplier, x="Supplier_name", y="Commissions", title="Commissions by Supplier"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.caption("No 'Commissions' data mapped yet, so this chart is unavailable.")
-
-        with chart_col4:
-            if "PartNumberSubmitted" in work.columns and "Qty" in work.columns and work["Qty"].notna().any():
-                top_parts = (
-                    work.groupby("PartNumberSubmitted", dropna=True)["Qty"]
-                    .sum()
-                    .sort_values(ascending=False)
-                    .head(10)
-                    .reset_index()
-                )
-                fig = px.bar(
-                    top_parts,
-                    x="Qty",
-                    y="PartNumberSubmitted",
-                    orientation="h",
-                    title="Top 10 Part Numbers by Qty",
-                )
-                fig.update_layout(yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.caption("No part number / Qty data mapped yet, so this chart is unavailable.")
-
-        if "Pay_Year" in work.columns and "Pay_Month" in work.columns and "Sales" in work.columns:
-            trend = work.dropna(subset=["Pay_Year", "Pay_Month"]).copy()
-            if not trend.empty and trend["Sales"].notna().any():
-                trend["Period"] = trend["Pay_Year"].astype(str) + "-" + trend["Pay_Month"].astype(str).str.zfill(2)
-                monthly = trend.groupby("Period", dropna=False)["Sales"].sum().reset_index().sort_values("Period")
-                fig = px.line(monthly, x="Period", y="Sales", title="Sales Trend by Pay Month", markers=True)
-                st.plotly_chart(fig, use_container_width=True)
-
-        st.divider()
-        st.subheader("Merged data (all columns)")
-        st.dataframe(work, use_container_width=True)
+        st.caption(f"{df.shape[0]} rows, {df.shape[1]} columns.")
+        st.dataframe(df, use_container_width=True)
