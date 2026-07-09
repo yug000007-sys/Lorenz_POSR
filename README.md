@@ -65,6 +65,23 @@ actual row data.
 > VPS, Docker with a mounted volume, etc.). Say the word if you'd like this
 > wired up to a proper always-on database instead.
 
+### Multi-sheet Excel files
+If an uploaded `.xlsx`/`.xls`/`.xlsm` has more than one sheet, pick which
+sheet(s) actually contain data you want (skip pure summary/pivot sheets
+unless you want their totals merged in too). For each sheet you pick:
+- Set the **header row number** — some sheets have title rows above the
+  real header; the app guesses this but you can correct it.
+- Optionally pick one or more **"only keep rows where these are filled
+  in"** columns to drop subtotal/blank/pivot rows mixed into the sheet
+  (e.g. require a date or order-number column to be non-blank).
+- Map that sheet's columns, same as a single-sheet file. Each sheet gets
+  its own saved mapping (e.g. `ATP::POS` vs `ATP::Detail`), and a header
+  name seen on one sheet auto-suggests on another sheet (or another
+  supplier) that reuses it.
+
+One **Add all sheets above to merged data** button appends every sheet
+you've mapped in one go.
+
 ### Cross-supplier auto-mapping
 If you've already mapped, say, `"Invoice Date"` → `InvoiceDate` for one
 supplier, any other supplier's file that also has a column literally named
