@@ -390,32 +390,89 @@ with tab_merge:
                         f"({auto_count}/{total_header_count} pre-filled)"
                     )
 
-                st.subheader("3. Optional: set Invoice Date / Pay Date individually for each file/sheet")
-                st.caption(
-                    "Useful when a raw file doesn't include these columns itself. Each uploaded "
-                    "file/sheet gets its own setting below — leave unchecked to skip."
-                )
-                date_overrides = {}  # (fname, ename) -> (invoice_date_or_None, pay_date_or_None)
+                st.subheader("3. Optional: set Invoice Date / Pay Date")
+                st.caption("Applies only to the sheets you set below — leave a sheet unset to skip it.")
+
+                bf1, bf2 = st.columns(2)
+                with bf1:
+                    bic1, bic2 = st.columns([2, 1])
+                    with bic1:
+                        bulk_invoice_date = st.date_input("Invoice date (bulk fill)", value=dt.date.today(), key="bulk_inv_date")
+                    with bic2:
+                        st.write("")
+                        fill_invoice_clicked = st.button("Fill all", key="fill_inv_all", use_container_width=True)
+                with bf2:
+                    bpc1, bpc2 = st.columns([2, 1])
+                    with bpc1:
+                        bulk_pay_date = st.date_input("Pay date (bulk fill)", value=dt.date.today(), key="bulk_pay_date")
+                    with bpc2:
+                        st.write("")
+                        fill_pay_clicked = st.button("Fill all", key="fill_pay_all", use_container_width=True)
+
+                if fill_invoice_clicked:
+                    for fname, ename, cleaned in extracted:
+                        entry_key = f"{fname}::{ename}"
+                        st.session_state[f"use_inv_{entry_key}"] = True
+                        st.session_state[f"inv_date_{entry_key}"] = bulk_invoice_date
+                if fill_pay_clicked:
+                    for fname, ename, cleaned in extracted:
+                        entry_key = f"{fname}::{ename}"
+                        st.session_state[f"use_pay_{entry_key}"] = True
+                        st.session_state[f"pay_date_{entry_key}"] = bulk_pay_date
+
+                files_in_order, seen_files = [], set()
+                entries_by_file = {}
                 for fname, ename, cleaned in extracted:
-                    entry_key = f"{fname}::{ename}"
-                    with st.expander(f"📅 {fname} — {ename}", expanded=False):
-                        st.caption("Columns and first rows in this sheet — check if it already has an invoice/pay date column before overriding.")
-                        st.dataframe(cleaned.head(2), use_container_width=True)
-                        d1, d2 = st.columns(2)
-                        with d1:
-                            use_invoice = st.checkbox("Apply an Invoice Date to every row", key=f"use_inv_{entry_key}")
-                            invoice_override = st.date_input(
-                                "Invoice Date", value=dt.date.today(), key=f"inv_date_{entry_key}", disabled=not use_invoice
+                    if fname not in seen_files:
+                        seen_files.add(fname)
+                        files_in_order.append(fname)
+                        entries_by_file[fname] = []
+                    entries_by_file[fname].append((ename, cleaned))
+
+                date_overrides = {}
+                for fname in files_in_order:
+                    sheet_entries = entries_by_file[fname]
+                    with st.expander(f"📄 {fname} ({len(sheet_entries)} sheet(s))", expanded=False):
+                        hc1, hc2, hc3, hc4 = st.columns([0.6, 2.4, 2.5, 2.5])
+                        hc2.caption("**Sheet**")
+                        hc3.caption("**Invoice date**")
+                        hc4.caption("**Pay date**")
+                        for ename, cleaned in sheet_entries:
+                            entry_key = f"{fname}::{ename}"
+                            preview_flag_key = f"show_preview_{entry_key}"
+                            row_c1, row_c2, row_c3, row_c4 = st.columns([0.6, 2.4, 2.5, 2.5])
+                            with row_c1:
+                                if st.button("👁", key=f"eye_{entry_key}", help=f"Preview columns/rows for {ename}"):
+                                    st.session_state[preview_flag_key] = not st.session_state.get(preview_flag_key, False)
+                            with row_c2:
+                                st.markdown(f"**{ename}**")
+                                st.caption(f"{len(cleaned)} rows")
+                            with row_c3:
+                                inv_c1, inv_c2 = st.columns([1, 2])
+                                use_invoice = inv_c1.checkbox("Set", key=f"use_inv_{entry_key}", label_visibility="collapsed")
+                                inv_key = f"inv_date_{entry_key}"
+                                if inv_key not in st.session_state:
+                                    st.session_state[inv_key] = dt.date.today()
+                                invoice_override = inv_c2.date_input(
+                                    "Invoice", key=inv_key, disabled=not use_invoice, label_visibility="collapsed",
+                                )
+                            with row_c4:
+                                pay_c1, pay_c2 = st.columns([1, 2])
+                                use_pay = pay_c1.checkbox("Set", key=f"use_pay_{entry_key}", label_visibility="collapsed")
+                                pay_key = f"pay_date_{entry_key}"
+                                if pay_key not in st.session_state:
+                                    st.session_state[pay_key] = dt.date.today()
+                                pay_override = pay_c2.date_input(
+                                    "Pay", key=pay_key, disabled=not use_pay, label_visibility="collapsed",
+                                )
+                            if st.session_state.get(preview_flag_key):
+                                st.caption("Columns and first rows in this sheet:")
+                                st.dataframe(cleaned.head(2), use_container_width=True)
+                            st.divider()
+                            date_overrides[(fname, ename)] = (
+                                invoice_override if use_invoice else None,
+                                pay_override if use_pay else None,
                             )
-                        with d2:
-                            use_pay = st.checkbox("Apply a Pay Date to every row", key=f"use_pay_{entry_key}")
-                            pay_override = st.date_input(
-                                "Pay Date", value=dt.date.today(), key=f"pay_date_{entry_key}", disabled=not use_pay
-                            )
-                    date_overrides[(fname, ename)] = (
-                        invoice_override if use_invoice else None,
-                        pay_override if use_pay else None,
-                    )
 
                 st.subheader("4. Save mapping & add to merged data")
                 col_x, col_y = st.columns(2)
