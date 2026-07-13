@@ -413,14 +413,14 @@ with tab_merge:
                 with bf1:
                     bic1, bic2 = st.columns([2, 1])
                     with bic1:
-                        bulk_invoice_date = st.date_input("Invoice date (bulk fill)", value=dt.date.today(), key="bulk_inv_date")
+                        bulk_invoice_date = st.date_input("Invoice date (bulk fill)", value=dt.date.today(), key="bulk_inv_date", format="MM/DD/YYYY")
                     with bic2:
                         st.write("")
                         fill_invoice_clicked = st.button("Fill all", key="fill_inv_all", use_container_width=True)
                 with bf2:
                     bpc1, bpc2 = st.columns([2, 1])
                     with bpc1:
-                        bulk_pay_date = st.date_input("Pay date (bulk fill)", value=dt.date.today(), key="bulk_pay_date")
+                        bulk_pay_date = st.date_input("Pay date (bulk fill)", value=dt.date.today(), key="bulk_pay_date", format="MM/DD/YYYY")
                     with bpc2:
                         st.write("")
                         fill_pay_clicked = st.button("Fill all", key="fill_pay_all", use_container_width=True)
@@ -471,6 +471,7 @@ with tab_merge:
                                     st.session_state[inv_key] = dt.date.today()
                                 invoice_override = inv_c2.date_input(
                                     "Invoice", key=inv_key, disabled=not use_invoice, label_visibility="collapsed",
+                                    format="MM/DD/YYYY",
                                 )
                             with row_c4:
                                 pay_c1, pay_c2 = st.columns([1, 2])
@@ -480,6 +481,7 @@ with tab_merge:
                                     st.session_state[pay_key] = dt.date.today()
                                 pay_override = pay_c2.date_input(
                                     "Pay", key=pay_key, disabled=not use_pay, label_visibility="collapsed",
+                                    format="MM/DD/YYYY",
                                 )
                             if st.session_state.get(preview_flag_key):
                                 st.caption("Columns and first rows in this sheet:")
