@@ -355,34 +355,50 @@ with tab_merge:
 
                 for ename in sheets_in_order:
                     headers = headers_by_sheet[ename]
-                    st.markdown(f"#### 📄 {ename}")
-                    st.caption(f"{len(headers)} column(s) found in this sheet")
-                    hc1, hc2, hc3 = st.columns([3, 1, 4])
-                    hc1.markdown("**Column in this sheet**")
-                    hc3.markdown("**Maps to your standard column**")
+
+                    # pre-compute status/default for every column first (needed for the count + hidden rows)
+                    col_info = []
                     for src in headers:
-                        total_header_count += 1
                         n = store.normalize(src)
                         saved = st.session_state.mappings.get(n)
                         if saved is not None:
                             default_val = saved if saved else IGNORE_LABEL
-                            auto_count += 1
+                            known = True
                         else:
                             exact = next((s for s in st.session_state.std_headers if store.normalize(s) == n), None)
                             default_val = exact if exact else IGNORE_LABEL
-                            if exact:
-                                auto_count += 1
-                        idx = std_options.index(default_val) if default_val in std_options else 0
-                        c1, c2, c3 = st.columns([3, 1, 4])
-                        dot = "🟢" if idx != 0 else "🟡"
-                        c1.markdown(f"{dot} `{src}`")
-                        c2.markdown("→")
-                        choice = c3.selectbox(
-                            f"map_{ename}_{src}", std_options, index=idx,
-                            key=f"map_{ename}_{src}", label_visibility="collapsed",
-                        )
-                        mapping_choices[(ename, src)] = choice
-                    st.divider()
+                            known = bool(exact)
+                        col_info.append((src, default_val, known))
+
+                    sheet_known = sum(1 for _, _, known in col_info if known)
+                    total_header_count += len(headers)
+                    auto_count += sheet_known
+
+                    with st.expander(
+                        f"📄 {ename} — {len(headers)} column(s), {sheet_known} pre-filled, "
+                        f"{len(headers) - sheet_known} need input",
+                        expanded=(sheet_known < len(headers)),
+                    ):
+                        show_all = st.checkbox("Show pre-filled columns too (to review or edit)", key=f"show_all_map_{ename}")
+
+                        hc1, hc2, hc3 = st.columns([3, 1, 4])
+                        hc1.markdown("**Column in this sheet**")
+                        hc3.markdown("**Maps to your standard column**")
+                        for src, default_val, known in col_info:
+                            if known and not show_all:
+                                # keep the existing mapping without re-rendering the row
+                                mapping_choices[(ename, src)] = default_val
+                                continue
+                            idx = std_options.index(default_val) if default_val in std_options else 0
+                            c1, c2, c3 = st.columns([3, 1, 4])
+                            dot = "🟢" if known else "🟡"
+                            c1.markdown(f"{dot} `{src}`")
+                            c2.markdown("→")
+                            choice = c3.selectbox(
+                                f"map_{ename}_{src}", std_options, index=idx,
+                                key=f"map_{ename}_{src}", label_visibility="collapsed",
+                            )
+                            mapping_choices[(ename, src)] = choice
 
                 if total_header_count:
                     st.caption(
