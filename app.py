@@ -399,6 +399,8 @@ with tab_merge:
                 for fname, ename, cleaned in extracted:
                     entry_key = f"{fname}::{ename}"
                     with st.expander(f"📅 {fname} — {ename}", expanded=False):
+                        st.caption("Columns and first rows in this sheet — check if it already has an invoice/pay date column before overriding.")
+                        st.dataframe(cleaned.head(2), use_container_width=True)
                         d1, d2 = st.columns(2)
                         with d1:
                             use_invoice = st.checkbox("Apply an Invoice Date to every row", key=f"use_inv_{entry_key}")
