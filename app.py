@@ -37,6 +37,7 @@ from utils.readers import (
     guess_anchor,
     read_raw_sheets,
 )
+from utils.gridview import show_excel_grid
 from utils.transform import apply_mapping, format_output_df, to_csv_bytes, to_excel_bytes
 
 st.set_page_config(page_title="Lorenz Merge & Dashboard", layout="wide")
@@ -479,7 +480,7 @@ with tab_dashboard:
         for fname, sheets in st.session_state.current_file_sheets.items():
             for sheet_name, raw_grid in sheets.items():
                 st.caption(f"{fname} — sheet: {sheet_name} — {raw_grid.shape[0]} rows, {raw_grid.shape[1]} columns (raw, as uploaded).")
-                st.dataframe(raw_grid, use_container_width=True)
+                show_excel_grid(raw_grid, key=f"raw_grid_{fname}_{sheet_name}")
         st.divider()
 
     df = st.session_state.merged_df
@@ -488,4 +489,4 @@ with tab_dashboard:
         st.info("Merge at least one supplier file in the **Merge Files** tab to see it here.")
     else:
         st.caption(f"{df.shape[0]} rows, {df.shape[1]} columns.")
-        st.dataframe(df, use_container_width=True)
+        show_excel_grid(df, key="merged_grid")
