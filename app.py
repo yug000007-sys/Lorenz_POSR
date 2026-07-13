@@ -390,15 +390,30 @@ with tab_merge:
                         f"({auto_count}/{total_header_count} pre-filled)"
                     )
 
-                st.subheader("3. Optional: set Invoice Date / Pay Date for this whole upload")
-                st.caption("Applied to every sheet added below. Useful when the raw file doesn't include these columns itself.")
-                d1, d2 = st.columns(2)
-                with d1:
-                    use_invoice = st.checkbox("Apply one Invoice Date to every row", key="use_inv")
-                    invoice_override = st.date_input("Invoice Date", value=dt.date.today(), key="inv_date", disabled=not use_invoice)
-                with d2:
-                    use_pay = st.checkbox("Apply one Pay Date to every row", key="use_pay")
-                    pay_override = st.date_input("Pay Date", value=dt.date.today(), key="pay_date", disabled=not use_pay)
+                st.subheader("3. Optional: set Invoice Date / Pay Date individually for each file/sheet")
+                st.caption(
+                    "Useful when a raw file doesn't include these columns itself. Each uploaded "
+                    "file/sheet gets its own setting below — leave unchecked to skip."
+                )
+                date_overrides = {}  # (fname, ename) -> (invoice_date_or_None, pay_date_or_None)
+                for fname, ename, cleaned in extracted:
+                    entry_key = f"{fname}::{ename}"
+                    with st.expander(f"📅 {fname} — {ename}", expanded=False):
+                        d1, d2 = st.columns(2)
+                        with d1:
+                            use_invoice = st.checkbox("Apply an Invoice Date to every row", key=f"use_inv_{entry_key}")
+                            invoice_override = st.date_input(
+                                "Invoice Date", value=dt.date.today(), key=f"inv_date_{entry_key}", disabled=not use_invoice
+                            )
+                        with d2:
+                            use_pay = st.checkbox("Apply a Pay Date to every row", key=f"use_pay_{entry_key}")
+                            pay_override = st.date_input(
+                                "Pay Date", value=dt.date.today(), key=f"pay_date_{entry_key}", disabled=not use_pay
+                            )
+                    date_overrides[(fname, ename)] = (
+                        invoice_override if use_invoice else None,
+                        pay_override if use_pay else None,
+                    )
 
                 st.subheader("4. Save mapping & add to merged data")
                 col_x, col_y = st.columns(2)
@@ -424,10 +439,11 @@ with tab_merge:
                             src: (mapping_choices.get((ename, src)) if mapping_choices.get((ename, src)) != IGNORE_LABEL else "")
                             for src in headers_by_sheet[ename]
                         }
+                        invoice_override, pay_override = date_overrides.get((fname, ename), (None, None))
                         transformed = apply_mapping(
                             cleaned, flat_mapping, st.session_state.std_headers, supplier,
-                            invoice_date_override=invoice_override if use_invoice else None,
-                            pay_date_override=pay_override if use_pay else None,
+                            invoice_date_override=invoice_override,
+                            pay_date_override=pay_override,
                         )
                         transformed = format_output_df(transformed, st.session_state.std_headers)
                         st.session_state.merged_df = pd.concat(
