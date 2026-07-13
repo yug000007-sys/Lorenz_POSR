@@ -500,25 +500,25 @@ with tab_dashboard:
             for sheet_name, raw_grid in sheets.items():
                 key = store.sheet_profile_key(supplier, sheet_name)
                 prof = st.session_state.sheet_profiles.get(key)
-                st.caption(f"{fname} — sheet: {sheet_name} — {raw_grid.shape[0]} rows, {raw_grid.shape[1]} columns.")
 
-                if prof and prof.get("include"):
-                    headered = apply_header_row(raw_grid, prof.get("header_row_idx0", 0))
-                    cols = list(headered.columns)
-                    anchor_col = prof.get("anchor_column") or (cols[0] if cols else None)
-                    if anchor_col not in cols and cols:
-                        anchor_col = cols[0]
-                    cleaned = extract_valid_rows(headered, anchor_col, prof.get("anchor_type", "text"))
+                with st.expander(f"📄 {fname} — {sheet_name} ({raw_grid.shape[0]} rows, {raw_grid.shape[1]} columns)", expanded=True):
+                    if prof and prof.get("include"):
+                        headered = apply_header_row(raw_grid, prof.get("header_row_idx0", 0))
+                        cols = list(headered.columns)
+                        anchor_col = prof.get("anchor_column") or (cols[0] if cols else None)
+                        if anchor_col not in cols and cols:
+                            anchor_col = cols[0]
+                        cleaned = extract_valid_rows(headered, anchor_col, prof.get("anchor_type", "text"))
 
-                    display_df = cleaned.copy()
-                    inv_col = next((c for c in cleaned.columns if st.session_state.mappings.get(store.normalize(c)) == "InvoiceDate"), None)
-                    pay_col = next((c for c in cleaned.columns if st.session_state.mappings.get(store.normalize(c)) == "Pay_Date"), None)
-                    display_df["Invoice Date (mapped)"] = cleaned[inv_col] if inv_col is not None else ""
-                    display_df["Pay Date (mapped)"] = cleaned[pay_col] if pay_col is not None else ""
-                    st.caption("Mapping is set up for this sheet — showing your original columns as uploaded, plus the mapped Invoice Date / Pay Date.")
-                    show_excel_grid(display_df, key=f"clean_grid_{fname}_{sheet_name}")
-                else:
-                    show_excel_grid(raw_grid, key=f"raw_grid_{fname}_{sheet_name}", excel_style=True)
+                        display_df = cleaned.copy()
+                        inv_col = next((c for c in cleaned.columns if st.session_state.mappings.get(store.normalize(c)) == "InvoiceDate"), None)
+                        pay_col = next((c for c in cleaned.columns if st.session_state.mappings.get(store.normalize(c)) == "Pay_Date"), None)
+                        display_df["Invoice Date (mapped)"] = cleaned[inv_col] if inv_col is not None else ""
+                        display_df["Pay Date (mapped)"] = cleaned[pay_col] if pay_col is not None else ""
+                        st.caption("Mapping is set up for this sheet — showing your original columns as uploaded, plus the mapped Invoice Date / Pay Date.")
+                        show_excel_grid(display_df, key=f"clean_grid_{fname}_{sheet_name}")
+                    else:
+                        show_excel_grid(raw_grid, key=f"raw_grid_{fname}_{sheet_name}", excel_style=True)
         st.divider()
 
     df = st.session_state.merged_df
@@ -526,5 +526,5 @@ with tab_dashboard:
     if df.empty:
         st.info("Merge at least one supplier file in the **Merge Files** tab to see it here.")
     else:
-        st.caption(f"{df.shape[0]} rows, {df.shape[1]} columns.")
-        show_excel_grid(df, key="merged_grid")
+        with st.expander(f"📄 Merged data ({df.shape[0]} rows, {df.shape[1]} columns)", expanded=True):
+            show_excel_grid(df, key="merged_grid")
