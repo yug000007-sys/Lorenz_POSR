@@ -20,11 +20,13 @@ Architecture mirrors the reference "POS Header Mapper" app:
 Nothing from your raw or merged/downloaded files is ever written to disk
 or cached — only the small JSON memory files in data/ are persisted.
 """
+import base64
 import datetime as dt
 import json
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from master_header import MASTER_COLUMNS, SUPPLIERS
 from utils import store
@@ -43,6 +45,26 @@ from utils.transform import apply_mapping, format_output_df, to_csv_bytes, to_ex
 st.set_page_config(page_title="Lorenz Merge & Dashboard", layout="wide")
 
 IGNORE_LABEL = "-- Ignore --"
+
+
+def trigger_browser_download(filename: str, content_str: str, mime: str = "application/json"):
+    """Force the browser to download a file immediately, without waiting for a button click."""
+    b64 = base64.b64encode(content_str.encode("utf-8")).decode()
+    components.html(
+        f"""
+        <script>
+        const link = document.createElement('a');
+        link.href = "data:{mime};base64,{b64}";
+        link.download = "{filename}";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
 ANCHOR_TYPES = ["date", "number", "text"]
 
 # ----------------------------------------------------------------------------
@@ -64,6 +86,8 @@ if "current_supplier" not in st.session_state:
     st.session_state.current_supplier = None
 if "uploader_version" not in st.session_state:
     st.session_state.uploader_version = 0
+if "auto_download_backup" not in st.session_state:
+    st.session_state.auto_download_backup = True
 
 # ==============================================================================
 # SIDEBAR — memory management, standard headers, backup/restore
@@ -133,9 +157,19 @@ with st.sidebar:
     st.divider()
     st.header("💾 Backup / restore")
     st.caption("Bundles your mappings, sheet setups, and standard columns into one file — keep it safe.")
+    st.checkbox(
+        "Auto-download a backup every time I save a mapping",
+        key="auto_download_backup",
+        help="Since Streamlit Cloud's free hosting can reset between sessions, this saves a fresh "
+        "backup file to your computer's Downloads folder right after each save, so you always have "
+        "a recent copy to restore from if that happens.",
+    )
     backup_payload = store.build_backup(st.session_state.mappings, st.session_state.sheet_profiles, st.session_state.std_headers)
+    if st.session_state.get("_pending_auto_download"):
+        trigger_browser_download(f"lorenz_backup_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.json", backup_payload)
+        st.session_state._pending_auto_download = False
     st.download_button(
-        "⬇️ Download backup",
+        "⬇️ Download backup now",
         backup_payload.encode("utf-8"),
         file_name=f"lorenz_backup_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.json",
         mime="application/json",
@@ -306,6 +340,8 @@ with tab_merge:
                                 "anchor_type": st.session_state.get(f"anchortype_{ename}", "text"),
                             }
                     store.save_sheet_profiles(st.session_state.sheet_profiles)
+                    if st.session_state.auto_download_backup:
+                        st.session_state._pending_auto_download = True
                     st.rerun()
 
             else:
@@ -509,6 +545,13 @@ with tab_merge:
                         n = store.normalize(src)
                         st.session_state.mappings[n] = "" if choice == IGNORE_LABEL else choice
                     store.save_mappings(st.session_state.mappings)
+                    if st.session_state.auto_download_backup:
+                        backup_payload = store.build_backup(
+                            st.session_state.mappings, st.session_state.sheet_profiles, st.session_state.std_headers
+                        )
+                        trigger_browser_download(
+                            f"lorenz_backup_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.json", backup_payload
+                        )
 
                     total_added = 0
                     for fname, ename, cleaned in extracted:
