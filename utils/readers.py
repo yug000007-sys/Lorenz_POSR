@@ -191,12 +191,15 @@ def detect_subtables(raw_df: pd.DataFrame) -> list:
     for i in range(n):
         non_blank = [(j, v) for j, v in enumerate(raw_df.iloc[i]) if not is_blank(v)]
         if len(non_blank) == 1:
+            label_value = non_blank[0][1]
+            if _looks_numeric(label_value) or looks_like_date(label_value):
+                continue  # a lone number/date (e.g. a subtotal) is not a section label
             for k in range(i + 1, min(i + 4, n)):
                 nxt_non_blank = sum(1 for v in raw_df.iloc[k] if not is_blank(v))
                 if nxt_non_blank == 0:
                     continue
                 if nxt_non_blank >= 3:
-                    markers.append({"label": str(non_blank[0][1]).strip(), "marker_row": i, "header_row0": k})
+                    markers.append({"label": str(label_value).strip(), "marker_row": i, "header_row0": k})
                 break
     if len(markers) < 2:
         return []
